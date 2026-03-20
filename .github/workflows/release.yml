@@ -35,11 +35,12 @@ jobs:
           SHORT_SHA=$(git rev-parse --short=7 HEAD)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          echo "tag=commit-$SHORT_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: commit-${{ steps.get_meta.outputs.short_sha }}
+          tag_name: ${{ steps.get_meta.outputs.tag }}
           name: Commit ${{ steps.get_meta.outputs.short_sha }}
           files: |
             steamdb_ext_${{ steps.get_meta.outputs.version }}.zip

@@ -335,6 +335,13 @@
 	"popup_calculator": {
 		"message": "カルキュレーター"
 	},
+	"popup_update_available": {
+		"message": "?????????????"
+	},
+	"popup_update_action": {
+		"message": "??"
+	},
+
 	"options": {
 		"message": "オプション"
 	},

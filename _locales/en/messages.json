@@ -348,6 +348,13 @@
 		"message": "Calculator"
 	},
 
+	"popup_update_available": {
+		"message": "New version available"
+	},
+	"popup_update_action": {
+		"message": "Update"
+	},
+
 	"options": {
 		"message": "Options"
 	},
