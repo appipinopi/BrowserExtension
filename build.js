@@ -12,6 +12,7 @@ delete manifest.$schema;
 {
 	await ArchiveChromium();
 	await ArchiveEdge();
+	await ArchiveBrave();
 	await ArchiveFirefox();
 } )();
 
@@ -43,6 +44,23 @@ function ArchiveEdge()
 	delete edgeManifest.browser_specific_settings;
 
 	const json = JSON.stringify( edgeManifest, null, '\t' );
+	archive.append( json, { name: 'manifest.json' } );
+
+	return archive.finalize();
+}
+
+function ArchiveBrave()
+{
+	// Brave is Chromium-based and uses the same manifest as Chrome
+	const zipPath = path.join( __dirname, `steamdb_ext_${version}_brave.zip` );
+	const archive = PrepareArchive( zipPath );
+
+	const braveManifest = structuredClone( manifest );
+	delete braveManifest.$schema;
+	delete braveManifest.background.scripts;
+	delete braveManifest.browser_specific_settings;
+
+	const json = JSON.stringify( braveManifest, null, '\t' );
 	archive.append( json, { name: 'manifest.json' } );
 
 	return archive.finalize();

@@ -52,6 +52,16 @@ jobs:
           asset_name: steamdb_ext_${{ steps.get_version.outputs.version }}_edge.zip
           asset_content_type: application/zip
 
+      - name: Upload Brave extension
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./steamdb_ext_${{ steps.get_version.outputs.version }}_brave.zip
+          asset_name: steamdb_ext_${{ steps.get_version.outputs.version }}_brave.zip
+          asset_content_type: application/zip
+
       - name: Upload Firefox extension
         uses: actions/upload-release-asset@v1
         env:
