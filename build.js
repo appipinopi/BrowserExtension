@@ -11,6 +11,7 @@ delete manifest.$schema;
 ( async() =>
 {
 	await ArchiveChromium();
+	await ArchiveEdge();
 	await ArchiveFirefox();
 } )();
 
@@ -25,6 +26,23 @@ function ArchiveChromium()
 	delete chromeManifest.browser_specific_settings;
 
 	const json = JSON.stringify( chromeManifest, null, '\t' );
+	archive.append( json, { name: 'manifest.json' } );
+
+	return archive.finalize();
+}
+
+function ArchiveEdge()
+{
+	// Edge is Chromium-based and uses the same manifest as Chrome
+	const zipPath = path.join( __dirname, `steamdb_ext_${version}_edge.zip` );
+	const archive = PrepareArchive( zipPath );
+
+	const edgeManifest = structuredClone( manifest );
+	delete edgeManifest.$schema;
+	delete edgeManifest.background.scripts;
+	delete edgeManifest.browser_specific_settings;
+
+	const json = JSON.stringify( edgeManifest, null, '\t' );
 	archive.append( json, { name: 'manifest.json' } );
 
 	return archive.finalize();

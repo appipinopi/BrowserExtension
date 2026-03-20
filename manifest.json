@@ -28,8 +28,10 @@
 	"host_permissions":
 	[
 		"https://steamdb.info/*",
+		"https://extension.steamdb.info/*",
 		"https://steamcommunity.com/*",
-		"https://*.steampowered.com/*"
+		"https://*.steampowered.com/*",
+		"https://api.steampowered.com/*"
 	],
 	"action":
 	{
