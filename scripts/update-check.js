@@ -25,7 +25,7 @@
 
 			if( result && typeof result.then === 'function' )
 			{
-				result.then( HandleUpdateResult ).catch( () => {} );
+				result.then( HandleUpdateResult ).catch( () => null );
 			}
 		}
 		catch
