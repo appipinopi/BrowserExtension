@@ -4,6 +4,36 @@
 
 const language = GetLanguage();
 const numberFormatter = new Intl.NumberFormat( language );
+let lowestPriceRetryTimer = null;
+let lowestPriceRetryCount = 0;
+
+/**
+ * @param {string} reason
+ */
+function ScheduleLowestPriceRetry( reason )
+{
+	if( lowestPriceRetryTimer !== null )
+	{
+		return;
+	}
+
+	if( lowestPriceRetryCount >= 5 )
+	{
+		WriteLog( 'Lowest price retry limit reached' );
+		return;
+	}
+
+	lowestPriceRetryCount++;
+	const delay = 500 * lowestPriceRetryCount;
+
+	WriteLog( `Retrying lowest price in ${delay}ms (${lowestPriceRetryCount}/5): ${reason}` );
+
+	lowestPriceRetryTimer = window.setTimeout( () =>
+	{
+		lowestPriceRetryTimer = null;
+		DrawLowestPrice();
+	}, delay );
+}
 
 if( document.getElementById( 'error_box' ) )
 {
@@ -418,6 +448,19 @@ else
 
 function DrawLowestPrice()
 {
+	const container = document.getElementById( 'game_area_purchase' );
+
+	if( !container )
+	{
+		ScheduleLowestPriceRetry( 'missing game_area_purchase' );
+		return;
+	}
+
+	if( container.querySelector( '.steamdb_prices' ) )
+	{
+		return;
+	}
+
 	/** @type {HTMLMetaElement} */
 	const price = document.querySelector( 'meta[itemprop="price"]' );
 
@@ -520,6 +563,7 @@ function DrawLowestPrice()
 		if( !currency )
 		{
 			WriteLog( 'Failed to determine currency, no priceCurrency and no store_user_config' );
+			ScheduleLowestPriceRetry( 'missing currency' );
 			return;
 		}
 	}
@@ -605,14 +649,6 @@ function DrawLowestPrice()
 
 	WriteLog( `Currency is "${currency}"` );
 
-	// Container
-	const container = document.getElementById( 'game_area_purchase' );
-
-	if( !container )
-	{
-		return;
-	}
-
 	const element = document.createElement( 'a' );
 	element.className = 'steamdb_prices';
 	element.href = GetHomepage() + 'app/' + GetCurrentAppID() + '/';
@@ -653,9 +689,6 @@ function DrawLowestPrice()
 			{
 				WriteLog( 'GetAppPrice failed to load' );
 			}
-
-			element.remove();
-
 			return;
 		}
 
