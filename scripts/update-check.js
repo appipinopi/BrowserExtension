@@ -25,7 +25,7 @@
 
 			if( result && typeof result.then === 'function' )
 			{
-				result.then( HandleUpdateResult ).catch( () => null );
+				result.then( HandlePromiseResult ).catch( IgnoreError );
 			}
 		}
 		catch
@@ -35,8 +35,26 @@
 	}
 
 	/**
+	 * @param {any} value
+	 * @returns {void}
+	 */
+	function HandlePromiseResult( value )
+	{
+		HandleUpdateResult( value );
+	}
+
+	/**
+	 * @returns {void}
+	 */
+	function IgnoreError()
+	{
+		// Intentionally ignore
+	}
+
+	/**
 	 * @param {any} statusOrResult
 	 * @param {any} details
+	 * @returns {void}
 	 */
 	function HandleUpdateResult( statusOrResult, details )
 	{
