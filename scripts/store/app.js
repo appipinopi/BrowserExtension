@@ -4,38 +4,6 @@
 
 const language = GetLanguage();
 const numberFormatter = new Intl.NumberFormat( language );
-/** @type {number | null} */
-let lowestPriceRetryTimer = null;
-/** @type {number} */
-let lowestPriceRetryCount = 0;
-
-/**
- * @param {string} reason
- */
-function ScheduleLowestPriceRetry( reason )
-{
-	if( lowestPriceRetryTimer !== null )
-	{
-		return;
-	}
-
-	if( lowestPriceRetryCount >= 5 )
-	{
-		WriteLog( 'Lowest price retry limit reached' );
-		return;
-	}
-
-	lowestPriceRetryCount++;
-	const delay = 500 * lowestPriceRetryCount;
-
-	WriteLog( `Retrying lowest price in ${delay}ms (${lowestPriceRetryCount}/5): ${reason}` );
-
-	lowestPriceRetryTimer = window.setTimeout( () =>
-	{
-		lowestPriceRetryTimer = null;
-		DrawLowestPrice();
-	}, delay );
-}
 
 if( document.getElementById( 'error_box' ) )
 {
@@ -450,20 +418,6 @@ else
 
 function DrawLowestPrice()
 {
-	const container = document.getElementById( 'game_area_purchase' );
-
-	if( !container )
-	{
-		ScheduleLowestPriceRetry( 'missing game_area_purchase' );
-		return;
-	}
-
-	const existingElement = container.querySelector( '.steamdb_prices' );
-	if( existingElement && existingElement.dataset.steamdbLoaded === '1' )
-	{
-		return;
-	}
-
 	/** @type {HTMLMetaElement} */
 	const price = document.querySelector( 'meta[itemprop="price"]' );
 
@@ -562,23 +516,10 @@ function DrawLowestPrice()
 			}
 		}
 
-		// If cart data isn't available, try wallet currency (logged-in users)
-		if( !currency && window.g_rgWalletInfo && Number.isInteger( window.g_rgWalletInfo.wallet_currency ) )
-		{
-			const walletCurrencyCode = window.g_rgWalletInfo.wallet_currency;
-			currency = ECurrencyCode[ walletCurrencyCode ] || null;
-
-			if( currency )
-			{
-				WriteLog( `Found wallet currency code ${walletCurrencyCode}` );
-			}
-		}
-
 		// If we still don't have a currency, do not request the price
 		if( !currency )
 		{
 			WriteLog( 'Failed to determine currency, no priceCurrency and no store_user_config' );
-			ScheduleLowestPriceRetry( 'missing currency' );
 			return;
 		}
 	}
@@ -664,41 +605,37 @@ function DrawLowestPrice()
 
 	WriteLog( `Currency is "${currency}"` );
 
-	let element = existingElement;
-	let top = null;
-	let bottom = null;
+	// Container
+	const container = document.getElementById( 'game_area_purchase' );
 
-	if( !element )
+	if( !container )
 	{
-		element = document.createElement( 'a' );
-		element.className = 'steamdb_prices';
-		element.href = GetHomepage() + 'app/' + GetCurrentAppID() + '/';
-		element.dir = _t( '@@bidi_dir' );
-
-		const image = document.createElement( 'img' );
-		image.src = GetLocalResource( 'icons/white.svg' );
-		element.appendChild( image );
-
-		top = document.createElement( 'div' );
-		top.className = 'steamdb_prices_top';
-		top.innerHTML = _t( 'app_lowest_price', [ '…' ] );
-
-		bottom = document.createElement( 'div' );
-		bottom.className = 'steamdb_prices_bottom';
-		bottom.innerHTML = _t( 'app_lowest_date', [ '…', '…' ] );
-
-		const textContainer = document.createElement( 'div' );
-		textContainer.appendChild( top );
-		textContainer.appendChild( bottom );
-		element.appendChild( textContainer );
-
-		container.insertAdjacentElement( 'afterbegin', element );
+		return;
 	}
-	else
-	{
-		top = element.querySelector( '.steamdb_prices_top' );
-		bottom = element.querySelector( '.steamdb_prices_bottom' );
-	}
+
+	const element = document.createElement( 'a' );
+	element.className = 'steamdb_prices';
+	element.href = GetHomepage() + 'app/' + GetCurrentAppID() + '/';
+	element.dir = _t( '@@bidi_dir' );
+
+	const image = document.createElement( 'img' );
+	image.src = GetLocalResource( 'icons/white.svg' );
+	element.appendChild( image );
+
+	const top = document.createElement( 'div' );
+	top.className = 'steamdb_prices_top';
+	top.innerHTML = _t( 'app_lowest_price', [ '…' ] );
+
+	const bottom = document.createElement( 'div' );
+	bottom.className = 'steamdb_prices_bottom';
+	bottom.innerHTML = _t( 'app_lowest_date', [ '…', '…' ] );
+
+	const textContainer = document.createElement( 'div' );
+	textContainer.appendChild( top );
+	textContainer.appendChild( bottom );
+	element.appendChild( textContainer );
+
+	container.insertAdjacentElement( 'afterbegin', element );
 
 	SendMessageToBackgroundScript( {
 		contentScriptQuery: 'GetAppPrice',
@@ -716,7 +653,9 @@ function DrawLowestPrice()
 			{
 				WriteLog( 'GetAppPrice failed to load' );
 			}
-			ScheduleLowestPriceRetry( 'GetAppPrice failed' );
+
+			element.remove();
+
 			return;
 		}
 
@@ -764,64 +703,54 @@ function DrawLowestPrice()
 		{
 			bottom.textContent = _t( 'app_lowest_date', [ lastOn, relativeText ] );
 		}
-
-		element.dataset.steamdbLoaded = '1';
 	} );
 }
 
 async function FetchSteamApiCurrentPlayers()
 {
-	try
+	const applicationConfigElement = document.getElementById( 'application_config' );
+
+	if( !applicationConfigElement )
 	{
-		const applicationConfigElement = document.getElementById( 'application_config' );
+		WriteLog( 'Failed to get application_config' );
+		return;
+	}
 
-		if( !applicationConfigElement )
+	const applicationConfig = JSON.parse( applicationConfigElement.dataset.config );
+	const webApiBaseUrl = applicationConfig.WEBAPI_BASE_URL;
+
+	if( !webApiBaseUrl )
+	{
+		WriteLog( 'Failed to get WEBAPI_BASE_URL' );
+		return;
+	}
+
+	const params = new URLSearchParams();
+	params.set( 'origin', location.origin );
+	params.set( 'appid', GetCurrentAppID().toString() );
+
+	const response = await fetch(
+		`${webApiBaseUrl}ISteamUserStats/GetNumberOfCurrentPlayers/v1/?${params.toString()}`,
 		{
-			WriteLog( 'Failed to get application_config' );
-			return 0;
-		}
-
-		const applicationConfig = JSON.parse( applicationConfigElement.dataset.config );
-		const webApiBaseUrl = applicationConfig.WEBAPI_BASE_URL;
-
-		if( !webApiBaseUrl )
-		{
-			WriteLog( 'Failed to get WEBAPI_BASE_URL' );
-			return 0;
-		}
-
-		const params = new URLSearchParams();
-		params.set( 'origin', location.origin );
-		params.set( 'appid', GetCurrentAppID().toString() );
-
-		const response = await fetch(
-			`${webApiBaseUrl}ISteamUserStats/GetNumberOfCurrentPlayers/v1/?${params.toString()}`,
-			{
-				headers: {
-					Accept: 'application/json',
-				}
+			headers: {
+				Accept: 'application/json',
 			}
-		);
-
-		if( !response.ok )
-		{
-			return 0;
 		}
+	);
 
-		const data = await response.json();
-
-		if( data && data.response && data.response.player_count > 0 )
-		{
-			return data.response.player_count;
-		}
-
-		return 0;
-	}
-	catch( error )
+	if( !response.ok )
 	{
-		WriteLog( 'FetchSteamApiCurrentPlayers failed', error );
 		return 0;
 	}
+
+	const data = await response.json();
+
+	if( data && data.response && data.response.player_count > 0 )
+	{
+		return data.response.player_count;
+	}
+
+	return 0;
 }
 
 /**
@@ -835,10 +764,6 @@ function DrawOnlineStatsWidget( items )
 	let peakAll = null;
 	let followers = null;
 	let steamApiPlayersFetch = null;
-	/** @type {number | null} */
-	let statsRetryTimer = null;
-	/** @type {number} */
-	let statsRetryCount = 0;
 
 	if( items[ 'online-stats' ] )
 	{
@@ -993,144 +918,112 @@ function DrawOnlineStatsWidget( items )
 		}
 	}
 
-	const ScheduleStatsRetry = ( reason ) =>
+	SendMessageToBackgroundScript( {
+		contentScriptQuery: 'GetApp',
+		appid: GetCurrentAppID(),
+	}, ( response ) =>
 	{
-		if( statsRetryTimer !== null )
+		if( !response || !response.success )
 		{
-			return;
-		}
-
-		if( statsRetryCount >= 5 )
-		{
-			WriteLog( 'Stats retry limit reached' );
-			return;
-		}
-
-		statsRetryCount++;
-		const delay = 500 * statsRetryCount;
-
-		WriteLog( `Retrying stats in ${delay}ms (${statsRetryCount}/5): ${reason}` );
-
-		statsRetryTimer = window.setTimeout( () =>
-		{
-			statsRetryTimer = null;
-			RequestAppStats();
-		}, delay );
-	};
-
-	const RequestAppStats = () =>
-	{
-		SendMessageToBackgroundScript( {
-			contentScriptQuery: 'GetApp',
-			appid: GetCurrentAppID(),
-		}, ( response ) =>
-		{
-			if( !response || !response.success )
+			if( response?.error )
 			{
-				if( response?.error )
-				{
-					WriteLog( `GetApp failed to load: ${response.error}` );
-				}
-				else
-				{
-					WriteLog( 'GetApp failed to load' );
-				}
-
-				ScheduleStatsRetry( 'GetApp failed' );
-
-				if( steamApiPlayersFetch )
-				{
-					steamApiPlayersFetch.then( ( livePlayers ) =>
-					{
-						if( livePlayers < 1 )
-						{
-							return;
-						}
-
-						onlineNow.textContent = FormatNumber( livePlayers );
-					} );
-				}
-
-				return;
-			}
-
-			WriteLog( 'GetApp loaded' );
-
-			if( items[ 'online-stats' ] && block !== null )
-			{
-				onlineNow.textContent = FormatNumber( response.data.cp );
-				peakToday.textContent = FormatNumber( response.data.mdp );
-				peakAll.textContent = FormatNumber( response.data.mp );
-
-				if( response.data.f > 0 )
-				{
-					followers.textContent = FormatNumber( response.data.f );
-				}
-				else
-				{
-					followers.previousElementSibling.remove();
-					followers.remove();
-				}
-
-				if( steamApiPlayersFetch )
-				{
-					steamApiPlayersFetch.then( ( livePlayers ) =>
-					{
-						if( livePlayers < 1 )
-						{
-							return;
-						}
-
-						WriteLog( 'FetchSteamApiCurrentPlayers loaded' );
-
-						onlineNow.textContent = FormatNumber( livePlayers );
-
-						if( livePlayers > response.data.mdp )
-						{
-							peakToday.textContent = FormatNumber( livePlayers );
-						}
-
-						if( livePlayers > response.data.mp )
-						{
-							peakAll.textContent = FormatNumber( livePlayers );
-						}
-					} );
-				}
-			}
-
-			if( items[ 'steamdb-last-update' ] && response.data.u )
-			{
-				const dateFormatter = new Intl.DateTimeFormat( language, { dateStyle: 'medium' } );
-				const actualDateText = dateFormatter.format( new Date( response.data.u * 1000 ) );
-				const [ daysSinceLastUpdate, relativeText ] = FormatRelativeDate( response.data.u );
-
-				const historyRelativeDate = document.createElement( 'span' );
-				historyRelativeDate.textContent = `(${relativeText})`;
-
-				if( daysSinceLastUpdate > 365 )
-				{
-					historyRelativeDate.className = 'steamdb_last_update_old';
-				}
-
-				historyLink.textContent = actualDateText + ' ';
-				historyLink.append( historyRelativeDate );
-
-				if( historyLinkResponsive !== null )
-				{
-					historyLinkResponsive.textContent = `${actualDateText} (${relativeText})`;
-				}
+				WriteLog( `GetApp failed to load: ${response.error}` );
 			}
 			else
 			{
-				for( const el of updateElements )
-				{
-					el.remove();
-				}
+				WriteLog( 'GetApp failed to load' );
 			}
-		} );
-	};
 
-	RequestAppStats();
+			for( const el of updateElements )
+			{
+				el.remove();
+			}
+
+			steamApiPlayersFetch.then( ( livePlayers ) =>
+			{
+				if( livePlayers < 1 )
+				{
+					block?.remove();
+					return;
+				}
+
+				onlineNow.textContent = FormatNumber( livePlayers );
+			} );
+
+			return;
+		}
+
+		WriteLog( 'GetApp loaded' );
+
+		if( items[ 'online-stats' ] && block !== null )
+		{
+			onlineNow.textContent = FormatNumber( response.data.cp );
+			peakToday.textContent = FormatNumber( response.data.mdp );
+			peakAll.textContent = FormatNumber( response.data.mp );
+
+			if( response.data.f > 0 )
+			{
+				followers.textContent = FormatNumber( response.data.f );
+			}
+			else
+			{
+				followers.previousElementSibling.remove();
+				followers.remove();
+			}
+
+			steamApiPlayersFetch.then( ( livePlayers ) =>
+			{
+				if( livePlayers < 1 )
+				{
+					return;
+				}
+
+				WriteLog( 'FetchSteamApiCurrentPlayers loaded' );
+
+				onlineNow.textContent = FormatNumber( livePlayers );
+
+				if( livePlayers > response.data.mdp )
+				{
+					peakToday.textContent = FormatNumber( livePlayers );
+				}
+
+				if( livePlayers > response.data.mp )
+				{
+					peakAll.textContent = FormatNumber( livePlayers );
+				}
+			} );
+		}
+
+		if( items[ 'steamdb-last-update' ] && response.data.u )
+		{
+			const dateFormatter = new Intl.DateTimeFormat( language, { dateStyle: 'medium' } );
+			const actualDateText = dateFormatter.format( new Date( response.data.u * 1000 ) );
+			const [ daysSinceLastUpdate, relativeText ] = FormatRelativeDate( response.data.u );
+
+			const historyRelativeDate = document.createElement( 'span' );
+			historyRelativeDate.textContent = `(${relativeText})`;
+
+			if( daysSinceLastUpdate > 365 )
+			{
+				historyRelativeDate.className = 'steamdb_last_update_old';
+			}
+
+			historyLink.textContent = actualDateText + ' ';
+			historyLink.append( historyRelativeDate );
+
+			if( historyLinkResponsive !== null )
+			{
+				historyLinkResponsive.textContent = `${actualDateText} (${relativeText})`;
+			}
+		}
+		else
+		{
+			for( const el of updateElements )
+			{
+				el.remove();
+			}
+		}
+	} );
 }
 
 function FollowInvalidateCache()
