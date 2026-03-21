@@ -559,6 +559,18 @@ function DrawLowestPrice()
 			}
 		}
 
+		// If cart data isn't available, try wallet currency (logged-in users)
+		if( !currency && window.g_rgWalletInfo && Number.isInteger( window.g_rgWalletInfo.wallet_currency ) )
+		{
+			const walletCurrencyCode = window.g_rgWalletInfo.wallet_currency;
+			currency = ECurrencyCode[ walletCurrencyCode ] || null;
+
+			if( currency )
+			{
+				WriteLog( `Found wallet currency code ${walletCurrencyCode}` );
+			}
+		}
+
 		// If we still don't have a currency, do not request the price
 		if( !currency )
 		{
