@@ -4,7 +4,9 @@
 
 const language = GetLanguage();
 const numberFormatter = new Intl.NumberFormat( language );
+/** @type {number | null} */
 let lowestPriceRetryTimer = null;
+/** @type {number} */
 let lowestPriceRetryCount = 0;
 
 /**
